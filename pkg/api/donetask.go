@@ -36,7 +36,7 @@ func taskDoneHandler(res http.ResponseWriter, req *http.Request, logger *log.Log
 		writeJson(res, http.StatusOK, map[string]any{})
 		return
 	} else {
-		dateNew, err := nextDate(time.Now(), task.Date, task.Repeat)
+		dateNew, err := nextDate(time.Now().AddDate(0, 0, 1), task.Date, task.Repeat)
 		if err != nil {
 			logger.Printf("WARN: error NextDay func, %v", err)
 			writeJsonError(res, http.StatusInternalServerError, "Error NextDay func: "+err.Error())

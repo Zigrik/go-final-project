@@ -9,18 +9,13 @@ import (
 	"time"
 )
 
-func checkDate(task *db.Task) (time.Time, error) {
+func parseDate(task *db.Task) (time.Time, error) {
 	t, err := time.Parse(dateForm, task.Date)
 	if err != nil {
 		return time.Time{}, err
 	}
 	return t, nil
 }
-
-func afterNow(date, now time.Time) bool {
-	return now.After(date)
-}
-
 func addTaskHandler(res http.ResponseWriter, req *http.Request, logger *log.Logger) {
 	var task db.Task
 	var buf bytes.Buffer
@@ -49,20 +44,17 @@ func addTaskHandler(res http.ResponseWriter, req *http.Request, logger *log.Logg
 		task.Date = now.Format(dateForm)
 	}
 
-	t, err := checkDate(&task)
+	t, err := parseDate(&task)
 	if err != nil {
 		logger.Printf("WARN: checkdate error, %v", err)
 		writeJsonError(res, http.StatusBadRequest, "Checkdate error: "+err.Error())
 		return
 	}
-	if afterNow(t, time.Now()) {
+	if AfterNow(time.Now(), t) {
 		if len(task.Repeat) == 0 {
 			task.Date = now.Format(dateForm)
 		} else {
-			//to include the current date in the calculation, we calculate yesterday's date,
-			//as the NextDate function starts calculating valid dates from the next day
-			dateYesterday := now.AddDate(0, 0, -1)
-			next, err := nextDate(dateYesterday, dateYesterday.Format(dateForm), task.Repeat)
+			next, err := nextDate(now, task.Date, task.Repeat)
 			if err != nil {
 				logger.Printf("WARN: date after now error, %v", err)
 				writeJsonError(res, http.StatusBadRequest, "Date after now error: "+err.Error())
@@ -71,7 +63,6 @@ func addTaskHandler(res http.ResponseWriter, req *http.Request, logger *log.Logg
 			task.Date = next
 		}
 	}
-
 	id, err := db.AddTask(&task)
 	if err != nil {
 		logger.Printf("WARN: error when adding to the database, %v", err)

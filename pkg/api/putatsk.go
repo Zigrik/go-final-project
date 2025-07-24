@@ -42,18 +42,18 @@ func putTaskHandler(res http.ResponseWriter, req *http.Request, logger *log.Logg
 		task.Date = now.Format(dateForm)
 	}
 
-	t, err := checkDate(&task)
+	t, err := parseDate(&task)
 	if err != nil {
 		logger.Printf("WARN: checkdate error, %v", err)
 		writeJsonError(res, http.StatusBadRequest, "Checkdate error: "+err.Error())
 		return
 	}
 
-	if afterNow(t, time.Now()) {
+	if AfterNow(time.Now(), t) {
 		if len(task.Repeat) == 0 {
 			task.Date = now.Format(dateForm)
 		} else {
-			next, err := nextDate(now, task.Date, task.Repeat)
+			next, err := nextDate(now.AddDate(0, 0, 1), task.Date, task.Repeat)
 			if err != nil {
 				logger.Printf("WARN: date after now error, %v", err)
 				writeJsonError(res, http.StatusBadRequest, "Date after now error: "+err.Error())
@@ -63,7 +63,7 @@ func putTaskHandler(res http.ResponseWriter, req *http.Request, logger *log.Logg
 		}
 	}
 
-	_, err = checkDate(&task)
+	_, err = parseDate(&task)
 	if err != nil {
 		logger.Printf("WARN: checkdate error, %v", err)
 		writeJsonError(res, http.StatusBadRequest, "Checkdate error: "+err.Error())

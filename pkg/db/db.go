@@ -19,7 +19,7 @@ CREATE TABLE scheduler (
 	repeat VARCHAR(128)
 );`
 
-var Database *sql.DB
+var database *sql.DB
 
 type Task struct {
 	ID      string `json:"id"`
@@ -27,6 +27,10 @@ type Task struct {
 	Title   string `json:"title"`
 	Comment string `json:"comment"`
 	Repeat  string `json:"repeat"`
+}
+
+func CloseDatabase() {
+	database.Close()
 }
 
 // we check the name and path of the database from the environment variable. If the data is incorrect, we use the default database
@@ -57,7 +61,7 @@ func Init(dbFile string, logger *log.Logger) error {
 	dbFile = checkTodoDbPath(dbFile, logger)
 
 	var err error
-	Database, err = sql.Open("sqlite", dbFile)
+	database, err = sql.Open("sqlite", dbFile)
 	if err != nil {
 		return err
 	}
@@ -75,7 +79,7 @@ func Init(dbFile string, logger *log.Logger) error {
 		file.Close()
 		logger.Printf("INFO: the %s file has been created\n", dbFile)
 
-		_, err = Database.Exec(schema)
+		_, err = database.Exec(schema)
 		if err != nil {
 			return err
 		}

@@ -8,18 +8,9 @@ import (
 )
 
 func AddTask(task *Task) (int64, error) {
-	if Database == nil {
-		return 0, fmt.Errorf("database not initialized")
-	}
-
-	tx, err := Database.Begin()
-	if err != nil {
-		return 0, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback() // Безопасный откат если не будет Commit
 
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (:date, :title, :comment, :repeat)`
-	res, err := tx.Exec(query,
+	res, err := database.Exec(query,
 		sql.Named("date", task.Date),
 		sql.Named("title", task.Title),
 		sql.Named("comment", task.Comment),
@@ -33,40 +24,37 @@ func AddTask(task *Task) (int64, error) {
 		return 0, err
 	}
 
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("failed to commit transaction: %w", err)
-	}
 	return id, nil
 }
 
 func Tasks(limit int, search, dateForm string) ([]*Task, error) {
-	if Database == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
 
 	var rows *sql.Rows
 	var err error
 	var date time.Time
 
-	if date, err = time.Parse("02.01.2006", search); err == nil {
+	date, _ = time.Parse("02.01.2006", search)
+	switch date.IsZero() {
+	case false:
 		query := `SELECT id, date, title, comment, repeat 
-                 FROM scheduler 
-				 WHERE date = ? 
-                 ORDER BY date ASC, id ASC LIMIT ?`
-		rows, err = Database.Query(query, date.Format(dateForm), limit)
-	} else if search != "" {
-		query := `SELECT id, date, title, comment, repeat 
-				  FROM scheduler 
-				  WHERE title 
-				  LIKE ? OR comment LIKE ? 
-				  ORDER BY date ASC, id ASC LIMIT ?`
-		search = "%" + search + "%"
-		rows, err = Database.Query(query, search, search, limit)
-	} else {
-		query := `SELECT id, date, title, comment, repeat 
-                 FROM scheduler 
-                 ORDER BY date ASC, id ASC LIMIT ?`
-		rows, err = Database.Query(query, limit)
+					FROM scheduler 
+					WHERE date = ? 
+					ORDER BY date ASC, id ASC LIMIT ?`
+		rows, err = database.Query(query, date.Format(dateForm), limit)
+	case true:
+		if search != "" {
+			query := `SELECT id, date, title, comment, repeat 
+						FROM scheduler 
+						WHERE title LIKE CONCAT('%', ?, '%')
+						OR comment LIKE CONCAT('%', ?, '%') 
+						ORDER BY date ASC, id ASC LIMIT ?`
+			rows, err = database.Query(query, search, search, limit)
+		} else {
+			query := `SELECT id, date, title, comment, repeat 
+						FROM scheduler 
+						ORDER BY date ASC, id ASC LIMIT ?`
+			rows, err = database.Query(query, limit)
+		}
 	}
 
 	if err != nil {
@@ -95,13 +83,6 @@ func Tasks(limit int, search, dateForm string) ([]*Task, error) {
 }
 
 func GetTask(id string) (*Task, error) {
-	if Database == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-
-	if id == "" {
-		return nil, fmt.Errorf("task ID cannot be empty")
-	}
 
 	_, err := strconv.Atoi(id)
 	if err != nil {
@@ -113,7 +94,7 @@ func GetTask(id string) (*Task, error) {
 			  WHERE id = ?`
 
 	var task Task
-	err = Database.QueryRow(query, id).Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	err = database.QueryRow(query, id).Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
@@ -123,18 +104,9 @@ func GetTask(id string) (*Task, error) {
 }
 
 func UpdateTask(task *Task) error {
-	if Database == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
-	tx, err := Database.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
 
 	query := `UPDATE scheduler SET date = :date, title = :title, comment = :comment, repeat = :repeat WHERE id = :id `
-	res, err := tx.Exec(query,
+	_, err := database.Exec(query,
 		sql.Named("date", task.Date),
 		sql.Named("title", task.Title),
 		sql.Named("comment", task.Comment),
@@ -145,31 +117,21 @@ func UpdateTask(task *Task) error {
 		return fmt.Errorf("failed to execute update: %w", err)
 	}
 
-	count, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if count == 0 {
-		return fmt.Errorf(`incorrect id for updating task`)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
 	return nil
 }
 
 func DeleteTask(id string) error {
-	if Database == nil {
-		return fmt.Errorf("database not initialized")
-	}
 
-	tx, err := Database.Begin()
+	tx, err := database.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
 	query := `DELETE FROM scheduler WHERE id = :id`
 	result, err := tx.Exec(query, sql.Named("id", id))

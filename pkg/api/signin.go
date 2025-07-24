@@ -13,7 +13,7 @@ import (
 
 var password string
 
-func CheckPassword() {
+func SetPassword() {
 	password = os.Getenv("TODO_PASSWORD")
 }
 

@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+func AfterNow(t1, t2 time.Time) bool {
+	truncT1 := t1.Truncate(24 * time.Hour)
+	truncT2 := t2.Truncate(24 * time.Hour)
+
+	return truncT1.After(truncT2)
+}
+
 // the required day of the current month is calculated when calculating from the end of the month
 func daysInMonth(date time.Time, delta int) int {
 	firstDayOfNextMonth := time.Date(date.Year(), date.Month()+1, 1, 0, 0, 0, 0, date.Location())
@@ -38,7 +45,7 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 		if len(repeatParam) != 1 {
 			return "", formatError
 		}
-		for !dateNew.After(now) || !dateNew.After(start) {
+		for dateNew.Before(now) || !dateNew.After(start) {
 			dateNew = dateNew.AddDate(1, 0, 0)
 		}
 	case "d":
@@ -46,10 +53,10 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 			return "", formatError
 		}
 		days, err := strconv.Atoi(repeatParam[1])
-		if err != nil || days > 400 {
+		if err != nil || days > 400 || days < 1 {
 			return "", formatError
 		}
-		for !dateNew.After(now) || !dateNew.After(start) {
+		for dateNew.Before(now) || !dateNew.After(start) {
 			dateNew = dateNew.AddDate(0, 0, days)
 		}
 	case "w":
@@ -69,7 +76,7 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 			week[time.Weekday(day)] = true
 		}
 		var correctDate bool
-		for !dateNew.After(now) || !dateNew.After(start) || !correctDate {
+		for dateNew.Before(now) || !dateNew.After(start) || !correctDate {
 			dateNew = dateNew.AddDate(0, 0, 1)
 			correctDate = false
 			if week[dateNew.Weekday()] {
@@ -90,7 +97,6 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 			}
 			dayOfMonth[day] = true
 		}
-		fmt.Println(dayOfMonth)
 
 		month := make(map[time.Month]bool)
 		if len(repeatParam) == 3 {
@@ -105,7 +111,7 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 		}
 
 		var correctDate bool
-		for !dateNew.After(now) || !dateNew.After(start) || !correctDate {
+		for dateNew.Before(now) || !dateNew.After(start) || !correctDate {
 			dateNew = dateNew.AddDate(0, 0, 1)
 			correctDate = false
 			if (len(repeatParam) == 3 && month[dateNew.Month()]) || len(repeatParam) == 2 {
@@ -156,7 +162,7 @@ func nextDateHandler(res http.ResponseWriter, req *http.Request, logger *log.Log
 
 	repeat := query.Get("repeat")
 
-	nextDate, err := nextDate(now, dstart, repeat)
+	nextDate, err := nextDate(now.AddDate(0, 0, 1), dstart, repeat)
 	if err != nil {
 		logger.Printf("WARN: nextDate error: %v", err.Error())
 		http.Error(res, err.Error(), http.StatusBadRequest)
